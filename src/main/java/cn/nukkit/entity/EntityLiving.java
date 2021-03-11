@@ -52,9 +52,11 @@ public abstract class EntityLiving extends Entity implements EntityDamageable {
 
     protected int attackTime = 0;
 
+    protected boolean invisible = false;
+
     protected float movementSpeed = 0.1f;
 
-    protected int turtleTicks = 0;
+    protected int turtleTicks = 200;
 
     private boolean blocking = false;
 
@@ -114,10 +116,6 @@ public abstract class EntityLiving extends Entity implements EntityDamageable {
             }
         }
 
-        if (this.blockedByShield(source)) {
-            return false;
-        }
-
         if (super.attack(source)) {
             if (source instanceof EntityDamageByEntityEvent) {
                 Entity damager = ((EntityDamageByEntityEvent) source).getDamager();
@@ -125,7 +123,7 @@ public abstract class EntityLiving extends Entity implements EntityDamageable {
                     damager = ((EntityDamageByChildEntityEvent) source).getChild();
                 }
 
-                // Critical hit
+                //Critical hit
                 if (damager instanceof Player && !damager.onGround) {
                     AnimatePacket animate = new AnimatePacket();
                     animate.action = AnimatePacket.Action.CRITICAL_HIT;
@@ -138,7 +136,7 @@ public abstract class EntityLiving extends Entity implements EntityDamageable {
                 }
 
                 if (damager.isOnFire() && !(damager instanceof Player)) {
-                    this.setOnFire(this.server.getDifficulty() << 1);
+                    this.setOnFire(2 * this.server.getDifficulty());
                 }
 
                 double deltaX = this.x - damager.x;
@@ -148,11 +146,11 @@ public abstract class EntityLiving extends Entity implements EntityDamageable {
 
             EntityEventPacket pk = new EntityEventPacket();
             pk.eid = this.getId();
-            pk.event = this.getHealth() < 1 ? EntityEventPacket.DEATH_ANIMATION : EntityEventPacket.HURT_ANIMATION;
+            pk.event = this.getHealth() <= 0 ? EntityEventPacket.DEATH_ANIMATION : EntityEventPacket.HURT_ANIMATION;
             Server.broadcastPacket(this.hasSpawned.values(), pk);
 
             this.attackTime = source.getAttackCooldown();
-            this.scheduleUpdate();
+
             return true;
         } else {
             return false;
@@ -225,8 +223,6 @@ public abstract class EntityLiving extends Entity implements EntityDamageable {
         if (motion.y > base) {
             motion.y = base;
         }
-
-        this.resetFallDistance();
 
         this.setMotion(motion);
     }
