@@ -81,7 +81,7 @@ public abstract class Entity extends Location implements Metadatable {
     public static final int DATA_DISPLAY_ITEM = 16; //int (id | (data << 16))
     public static final int DATA_DISPLAY_OFFSET = 17; //int
     public static final int DATA_HAS_DISPLAY = 18; //byte (must be 1 for minecart to show block inside)
-    public static final int DATA_ENDERMAN_HELD_RUNTIME_ID = 23; //short
+    public static final int DATA_ENDERMAN_HELD_RUNTIME_ID = 23; //int (block runtime id)
     public static final int DATA_ENTITY_AGE = 24; //short
     public static final int DATA_PLAYER_FLAGS = 26; //byte
     public static final int DATA_PLAYER_BED_POSITION = 28; //block coords
@@ -2323,18 +2323,24 @@ public abstract class Entity extends Location implements Metadatable {
     }
 
     public boolean setDataProperty(EntityData data) {
-        return setDataProperty(data, true);
+        return this.setDataProperty(data, true);
     }
 
     public boolean setDataProperty(EntityData data, boolean send) {
-        if (!Objects.equals(data, this.dataProperties.get(data.getId()))) {
-            this.dataProperties.put(data);
-            if (send) {
-                this.sendData(this.hasSpawned.values().toArray(new Player[0]), new EntityMetadata().put(this.dataProperties.get(data.getId())));
-            }
-            return true;
+        if (Objects.equals(data, this.dataProperties.get(data.getId()))) {
+            return false;
         }
-        return false;
+
+        this.dataProperties.put(data);
+        if (send) {
+            EntityMetadata metadata = new EntityMetadata();
+            metadata.put(this.dataProperties.get(data.getId()));
+            if (data.getId() == DATA_FLAGS2) {
+                metadata.put(this.dataProperties.get(DATA_FLAGS));
+            }
+            this.sendData(this.hasSpawned.values().toArray(new Player[0]), metadata);
+        }
+        return true;
     }
 
     public boolean setDataPropertyAndSendOnlyToSelf(EntityData data) {

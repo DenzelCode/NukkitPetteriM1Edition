@@ -2,7 +2,10 @@ package cn.nukkit.level;
 
 import cn.nukkit.Player;
 import cn.nukkit.Server;
-import cn.nukkit.block.*;
+import cn.nukkit.block.Block;
+import cn.nukkit.block.BlockGrass;
+import cn.nukkit.block.BlockID;
+import cn.nukkit.block.BlockRedstoneDiode;
 import cn.nukkit.blockentity.BlockEntity;
 import cn.nukkit.entity.BaseEntity;
 import cn.nukkit.entity.Entity;
@@ -38,6 +41,7 @@ import cn.nukkit.level.generator.task.GenerationTask;
 import cn.nukkit.level.generator.task.LightPopulationTask;
 import cn.nukkit.level.generator.task.PopulationTask;
 import cn.nukkit.level.particle.DestroyBlockParticle;
+import cn.nukkit.level.particle.ItemBreakParticle;
 import cn.nukkit.level.particle.Particle;
 import cn.nukkit.level.sound.Sound;
 import cn.nukkit.math.*;
@@ -2091,6 +2095,8 @@ public class Level implements ChunkManager, Metadatable {
 
         item.useOn(target);
         if (item.isTool() && item.getDamage() >= item.getMaxDurability()) {
+            this.addSoundToViewers(target, cn.nukkit.level.Sound.RANDOM_BREAK);
+            this.addParticle(new ItemBreakParticle(target, item));
             item = new ItemBlock(Block.get(BlockID.AIR), 0, 0);
         }
 
@@ -2194,6 +2200,8 @@ public class Level implements ChunkManager, Metadatable {
 
                 if ((!player.isSneaking() || player.getInventory().getItemInHand().isNull()) && target.canBeActivated() && target.onActivate(item, player)) {
                     if (item.isTool() && item.getDamage() >= item.getMaxDurability()) {
+                        this.addSoundToViewers(target, cn.nukkit.level.Sound.RANDOM_BREAK);
+                        this.addParticle(new ItemBreakParticle(target, item));
                         item = new ItemBlock(Block.get(BlockID.AIR), 0, 0);
                     }
 
@@ -2211,6 +2219,8 @@ public class Level implements ChunkManager, Metadatable {
             }
         } else if (target.canBeActivated() && target.onActivate(item, null)) {
             if (item.isTool() && item.getDamage() >= item.getMaxDurability()) {
+                this.addSoundToViewers(target, cn.nukkit.level.Sound.RANDOM_BREAK);
+                this.addParticle(new ItemBreakParticle(target, item));
                 item = new ItemBlock(Block.get(BlockID.AIR), 0, 0);
             }
 
@@ -2456,8 +2466,8 @@ public class Level implements ChunkManager, Metadatable {
         return this.getNearbyEntities(bb, null);
     }
 
-    private static Entity[] EMPTY_ENTITY_ARR = new Entity[0];
-    private static Entity[] ENTITY_BUFFER = new Entity[512];
+    private static final Entity[] EMPTY_ENTITY_ARR = new Entity[0];
+    private static final Entity[] ENTITY_BUFFER = new Entity[512];
 
     public Entity[] getNearbyEntities(AxisAlignedBB bb, Entity entity) {
         return getNearbyEntities(bb, entity, false);
@@ -3376,16 +3386,17 @@ public class Level implements ChunkManager, Metadatable {
         // Hack: Fix the y1 glitch, do not teleport players standing at y=1 to spawn on join
         // For some reason player's y coord is 0.999 instead of 1 when they join
         // This may need a better fix later
-        if (spawn.y < 1) {
-            spawn.y = 1.01;
-        }
+        //if (spawn.y < 1) {
+        //    spawn.y = 1.01;
+        //}
 
-        Vector3 v = spawn.floor();
-        FullChunk chunk = this.getChunk((int) v.x >> 4, (int) v.z >> 4, false);
-        int x = (int) v.x & 0x0f;
-        int z = (int) v.z & 0x0f;
+        spawn.y = spawn.y + 0.1;
+        Vector3 pos = spawn.floor();
+        FullChunk chunk = this.getChunk((int) pos.x >> 4, (int) pos.z >> 4, false);
+        int x = (int) pos.x & 0x0f;
+        int z = (int) pos.z & 0x0f;
         if (chunk != null && chunk.isGenerated()) {
-            int y = (int) NukkitMath.clamp(v.y, 1, 254);
+            int y = NukkitMath.clamp((int) pos.y, 1, 254);
             boolean wasAir = chunk.getBlockId(x, y - 1, z) == 0;
             for (; y > 0; --y) {
                 int b = chunk.getFullBlock(x, y, z);
@@ -3407,17 +3418,17 @@ public class Level implements ChunkManager, Metadatable {
                     b = chunk.getFullBlock(x, y, z);
                     block = Block.get(b >> 4, b & 0x0f);
                     if (!this.isFullBlock(block)) {
-                        return new Position(spawn.x, y == (int) spawn.y ? spawn.y : y, spawn.z, this);
+                        return new Position(pos.x + 0.5, pos.y + 0.1, pos.z + 0.5, this);
                     }
                 } else {
                     ++y;
                 }
             }
 
-            v.y = y;
+            pos.y = y;
         }
 
-        return new Position(spawn.x, v.y, spawn.z, this);
+        return new Position(pos.x + 0.5, pos.y + 0.1, pos.z + 0.5, this);
     }
 
     public int getTime() {
@@ -3581,13 +3592,14 @@ public class Level implements ChunkManager, Metadatable {
     }
 
     public void unloadChunks(boolean force) {
-        this.unloadChunks(100, force);
+        this.unloadChunks(50, force);
     }
 
     public void unloadChunks(int maxUnload, boolean force) {
         if (!this.unloadQueue.isEmpty()) {
             long now = System.currentTimeMillis();
 
+            int unloaded = 0;
             LongList toRemove = null;
             for (Long2LongMap.Entry entry : unloadQueue.long2LongEntrySet()) {
                 long index = entry.getLongKey();
@@ -3598,11 +3610,12 @@ public class Level implements ChunkManager, Metadatable {
 
                 if (!force) {
                     long time = entry.getLongValue();
-                    if (maxUnload <= 0) {
+                    if (unloaded > maxUnload) {
                         break;
                     } else if (time > (now - 20000)) {
                         continue;
                     }
+                    unloaded++;
                 }
 
                 if (toRemove == null) toRemove = new LongArrayList();

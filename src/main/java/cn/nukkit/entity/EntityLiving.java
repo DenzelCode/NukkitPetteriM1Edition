@@ -490,7 +490,7 @@ public abstract class EntityLiving extends Entity implements EntityDamageable {
 
     public void setBlocking(boolean value) {
         this.blocking = value;
-        this.setDataFlag(DATA_FLAGS, DATA_FLAG_BLOCKING, value);
+        this.setDataFlag(DATA_FLAGS_EXTENDED, DATA_FLAG_BLOCKING, value);
     }
 
     public boolean dropsOnNaturalDeath() {
