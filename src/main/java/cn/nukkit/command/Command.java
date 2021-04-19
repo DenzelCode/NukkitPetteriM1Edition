@@ -159,6 +159,7 @@ public abstract class Command {
         }
 
         String[] permissions = this.permission.split(";");
+
         for (String permission : permissions) {
             if (target.hasPermission(permission)) {
                 return true;
